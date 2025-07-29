@@ -1,5 +1,4 @@
 from mcts.mcts.mcts import MCTSAgent
-from mcts.virtualhome.llm_policy import LLMPolicy
 from mcts.virtualhome.belief import Belief, container_classes, surface_classes
 from mcts.virtualhome.llm_model import LLM_Model
 from vh.data_gene.envs.unity_environment import UnityEnvironment
@@ -10,6 +9,7 @@ import pickle
 import argparse
 import time
 import copy
+from model_loader import load_model
 
 def clean_graph(state, goal_spec, last_opened):
     new_graph = {}
@@ -85,7 +85,7 @@ class mcts_vh_env:
         self.task_goal = task_goal
         self.vh_pyenv.pomdp = True
         self.model = None
-        self.env_task_set = pickle.load(open('./vh/dataset/env_task_set_3_simple.pik', 'rb'))
+        # self.env_task_set = pickle.load(open('./vh/dataset/env_task_set_3_simple.pik', 'rb'))
         self.history = []
         self.init_history = []
         self.cur_state_graph = graph
@@ -322,7 +322,7 @@ def parse_args():
     parser.add_argument('--load_path', default=None, type=str)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--evaluate', default=True)
-    parser.add_argument('--model', default="gpt-3.5-turbo-0125", type=str)
+    parser.add_argument('--model', default="Qwen2.5-7B-Instruct", type=str)
     return parser.parse_args()
 
 def find_test_data_file_path(args):
@@ -346,7 +346,9 @@ def test():
                     'x_display': "1",
                     'no_graphics': True
     }
-    llm_model = LLM_Model("cuda:0", args.model)
+
+    model, model_params = load_model(args.model, 'models.yaml')
+    llm_model = LLM_Model("cuda:0", model, model_params)
     vhenv = UnityEnvironment(num_agents=1,
                                 max_episode_length=100,
                                 port_id=2,
@@ -370,14 +372,14 @@ def test():
         task_goal=vhenv.task_goal,
         graph=graph,
     )
-    agent = MCTSAgent(args, env, uct_type=args.uct_type, use_llm=True)
+    agent = MCTSAgent(args, env, uct_type=args.uct_type, use_llm=True, model=model, model_params=model_params)
     # llm_policy = LLMPolicy(device="cuda:0")
     print(vhenv.task_goal)
     history = []
     done = False
     succ = 0
     total = 0
-    for i in range(len(vhenv.env_task_set)):
+    for i in range(len(env_task_set)):
 
         agent.llm_policy.prompt_buffer.clear()
         obs = vhenv.reset(task_id=i)
@@ -403,15 +405,15 @@ def test():
         
         # print(vhenv.task_goal)
         done = False
-        for i in range(30):
-            print(" ---------------------- Step: ", i, " ---------------------- ")
-            action = agent.search(obs, history, i, valid_actions, done)
+        for j in range(30):
+            print(" ---------------------- Step: ", j, " ---------------------- ")
+            action = agent.search(obs, history, j, valid_actions, done)
             # action = agent.llm_policy.act(history, obs, valid_actions, agent.env.get_goal()) 
             # ob, reward, done, history, valid_actions = env.step(agent.valid_action_dict[action])
             graph = vhenv.get_graph()
             plate_ids = []
 
-            obs, reward, done, info, success = vhenv.step({0: action})
+            obs, reward, done, info = vhenv.step({0: action})
             agent.env.update_(action, obs[0]) 
             valid_actions = agent.env.get_valid_action(obs)
             history.append(action)

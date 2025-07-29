@@ -1,0 +1,30 @@
+Qwen2.5-7B-Instruct:
+  loading_params:
+    model_name: Qwen/Qwen2.5-7B-Instruct
+#    load_in_4bit: true
+#    bnb_4bit_quant_type: nf4
+    torch_dtype: auto
+    device_map: auto
+    trust_remote_code: true
+  goal_sample_params:
+    max_new_tokens: 32
+    temperature: 0.7
+    top_p: 0.9
+    top_k: 50
+    repetition_penalty: 1.0
+    num_return_sequences: 1
+    no_repeat_ngram_size: 0
+#    length_penalty: 1.1
+    do_sample: true
+    stop: ["\\n"]
+  sampling_params:
+    max_new_tokens: 32
+    temperature: 0.6
+    top_p: 0.9
+    top_k: 50
+    repetition_penalty: 1.1
+    num_return_sequences: 50
+    no_repeat_ngram_size: 0
+#    length_penalty: 1.0
+    do_sample: true
+    stop: ["\\n"]

@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-client = OpenAI(api_key="Your Key")
+# client = OpenAI(api_key="Your Key")
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
@@ -12,8 +12,8 @@ import random
 import pickle
 from mcts.virtualhome.expert_data import get_action_list_valid
 import time
-import backoff
-import openai as openai_api
+# import backoff
+# import openai as openai_api
 
 MAX_STEPS = 20  # maximum number of steps to be generated
 CUTOFF_THRESHOLD = 0.8  # early stopping threshold based on matching score and likelihood score
@@ -21,24 +21,25 @@ P = 0.5  # hyperparameter for early stopping heuristic to detect whether Plannin
 BETA = 0.3  # weighting coefficient used to rank generated samples
 LAMBDA = 0.5
 
-@backoff.on_exception(backoff.expo, openai_api.OpenAIError)
-def completions_with_backoff(**kwargs):
-    return client.chat.completions.create(**kwargs)
+# @backoff.on_exception(backoff.expo, openai_api.OpenAIError)
+# def completions_with_backoff(**kwargs):
+#     return client.chat.completions.create(**kwargs)
 
 class LLMPolicy:
-    def __init__(self, device, model='gpt-3.5-turbo-0125'):
+    def __init__(self, device, model, model_params):
         self.device = device
         self.model = model
-        self.sampling_params = \
-            {
-                "max_tokens": 10,
-                "temperature": 0.6,
-                "top_p": 0.9,
-                "n": 5,
-                "presence_penalty": 0.5,
-                "frequency_penalty": 0.3,
-                "stop": [',', '.', '\n']
-            }
+        self.goal_sample_params = model_params['goal_sample_params']
+        # self.sampling_params = \
+        #     {
+        #         "max_tokens": 10,
+        #         "temperature": 0.6,
+        #         "top_p": 0.9,
+        #         "n": 5,
+        #         "presence_penalty": 0.5,
+        #         "frequency_penalty": 0.3,
+        #         "stop": [',', '.', '\n']
+        #     }
         
         self.prompt_begin = """Generate a high-level plan for completing a household task using the allowed actions and visible objects.
 Allowed actions: walk to <object or room>, grab <object>, open <container>, close <container>, put <object> on <surface>, put <object> in <container>. Before taking objects from container, you need to open it first. 
@@ -252,15 +253,11 @@ Do not generate repeated or looped actions. You must interact with objects that 
         if prompt + task in self.prompt_buffer:
             return self.prompt_buffer[prompt + task]
         else:
-            response = completions_with_backoff(model=self.model,
-            timeout=5,
-            messages=[{
-                "role": "system",
-                "content": prompt + task,
-            }],
-            **self.sampling_params)
-            generated_samples = [response.choices[i].message.content.split(", ") \
-                for i in range(self.sampling_params['n'])]
+            response = self.model.generate(messages=[{"role": "system",
+                                                      "content": prompt + task,
+                                                      }],
+                                           **self.goal_sample_params)
+            generated_samples = [out.split(",") for out in response]
             self.prompt_buffer[prompt + task] = generated_samples
             return generated_samples
 
@@ -323,7 +320,7 @@ Do not generate repeated or looped actions. You must interact with objects that 
         #         emperical_prob.append(LAMBDA * action_count[action] / len(samples) + (1-LAMBDA) /len(valid_action_list))
         #     else:
         #         emperical_prob.append((1-LAMBDA) / len(valid_action_list))
-        return emperical_prob # , pred_value
+        return emperical_prob , pred_value
 
     def calculate_emperical_prob(self, history, observation, valid_action_list, instruction, done_reward, step_reward, discount_factor):
     # def act(self, history, observation, valid_action_list, instruction):

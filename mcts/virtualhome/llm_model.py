@@ -1,6 +1,6 @@
-from openai import OpenAI
-
-client = OpenAI(api_key="Your Key")
+# from openai import OpenAI
+#
+# client = OpenAI(api_key="Your Key")
 import numpy as np
 import torch
 from sentence_transformers import SentenceTransformer
@@ -8,6 +8,7 @@ from sentence_transformers import util as st_utils
 import json
 from typing import List
 import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"   # or "true"
 import random
 import pickle
 from mcts.virtualhome.expert_data import get_action_list_valid
@@ -20,31 +21,34 @@ BETA = 0.3  # weighting coefficient used to rank generated samples
 LAMBDA = 0.5
 
 class LLM_Model:
-    def __init__(self, device, model='gpt-3.5-turbo-0125'):
+    def __init__(self, device, model, model_params):
         self.device = device
+        # self.model = LocalLLM(model_name=model, **model_params['loading_params'])
         self.model = model
-        self.get_goal_sample_params = \
-            {
-                "max_tokens": 32,
-                "temperature": 0.5,
-                "top_p": 0.9,
-                "n": 1,
-                "presence_penalty": 0.5,
-                "frequency_penalty": 0.3,
-                "stop": ['\n']
-            }
-        
-        self.sampling_params = \
-            {
-                "max_tokens": 32,
-                "temperature": 0.5,
-                "top_p": 0.9,
-                "n": 50,
-                "presence_penalty": 0.5,
-                "frequency_penalty": 0.3,
-                "stop": ['\n']
-            }
-        
+        self.get_goal_sample_params = model_params['goal_sample_params']
+        self.sampling_params = model_params['sampling_params']
+        # self.get_goal_sample_params = \
+        #     {
+        #         "max_tokens": 32,
+        #         "temperature": 0.5,
+        #         "top_p": 0.9,
+        #         "n": 1,
+        #         "presence_penalty": 0.5,
+        #         "frequency_penalty": 0.3,
+        #         "stop": ['\n']
+        #     }
+
+        # self.sampling_params = \
+        #     {
+        #         "max_tokens": 32,
+        #         "temperature": 0.5,
+        #         "top_p": 0.9,
+        #         "n": 50,
+        #         "presence_penalty": 0.5,
+        #         "frequency_penalty": 0.3,
+        #         "stop": ['\n']
+        #     }
+
         self.prompt_furniture_begin = """Generate one most possible position of the objects in the scene. The objects should be placed INSIDE a room.
 
 Rooms in the scene: living room, kitchen, bedroom, bathroom
@@ -92,7 +96,7 @@ Now, answer the following questions:\n
         self.surface_list = self.object_info['objects_surface']
         # self.grabable_list = self.object_info['objects_grab']
         self.grabable_list = self.object_info['objects_grab']
-        self.container_list_embedding = self.translation_lm.encode(self.container_list, batch_size=8, 
+        self.container_list_embedding = self.translation_lm.encode(self.container_list, batch_size=8,
                 convert_to_tensor=True, device=self.device)  # lower batch_size if limited by GPU memory
         self.surface_list_embedding = self.translation_lm.encode(self.surface_list, batch_size=8,
                 convert_to_tensor=True, device=self.device)
@@ -106,7 +110,7 @@ Now, answer the following questions:\n
 
     def trans_observation_to_string(self, observation: int):
         '''translate observation  (int) into a string'''
-        obs_list = [] 
+        obs_list = []
         for i in range(5):
             obs_list.append(int(observation/10**i)%10)
         # obs_list = obs_list[::-1]
@@ -120,7 +124,7 @@ Now, answer the following questions:\n
                     obs_str += self.item_list[i] + " is "\
                         + self.state_list[obs_list[i]] + ", "
         return obs_str[:-2] + "."
-        
+
 
     def init_translation_trf(self):
         # initialize Translation LM
@@ -129,10 +133,10 @@ Now, answer the following questions:\n
         # create action embeddings using Translated LM
         # with open('available_actions.json', 'r') as f:
         #     self.action_list = json.load(f)
-        
-        
-        
-        self.action_list_embedding = self.translation_lm.encode(self.action_list, batch_size=8, 
+
+
+
+        self.action_list_embedding = self.translation_lm.encode(self.action_list, batch_size=8,
                 convert_to_tensor=True, device=self.device)  # lower batch_size if limited by GPU memory
 
         # create example task embeddings using Translated LM
@@ -148,7 +152,7 @@ Now, answer the following questions:\n
         most_similar_idxs = np.argsort(cos_scores)[-k:]
         matching_scores = cos_scores[most_similar_idxs]
         return most_similar_idxs, matching_scores
-    
+
     def find_most_similar(self, query_str, corpus_embedding):
         # helper function for finding similar sentence in a corpus given a query
         query_embedding = self.translation_lm.encode(query_str, convert_to_tensor=True, device=self.device, show_progress_bar=False,)
@@ -157,14 +161,14 @@ Now, answer the following questions:\n
         # retrieve high-ranked index and similarity score
         most_similar_idx = np.argmax(cos_scores)
         return most_similar_idx
-    
+
     def plan(self, task):
         best_overall_score = -np.inf
         samples = self.query_llm(task)
         for sample in samples:
             most_similar_idx, matching_score = self.find_most_similar(sample, self.action_list_embedding)
             # rank each sample by its similarity score and likelihood score
-            overall_score = matching_score 
+            overall_score = matching_score
             translated_action = self.action_list[most_similar_idx]
             # heuristic for penalizing generating the same action as the last action
             if self.previous_action is not None:
@@ -216,7 +220,7 @@ Now, answer the following questions:\n
                 is_done.append(True)
             else:
                 is_done.append(False)
-            num_of_steps.append(len(sample)) 
+            num_of_steps.append(len(sample))
             translated_action = valid_actions[most_similar_idx]
             actions.append(translated_action)
         # print(actions)
@@ -225,7 +229,7 @@ Now, answer the following questions:\n
 
     @staticmethod
     def construct_prompt(actions, observations, lang_goal, similar_obs_idx):
-        # construct the prompt with the format of 
+        # construct the prompt with the format of
         # goal: <goal>
         # completed actions: <action1>, <action2>, ... <action<similar_obs_idx>>
         # visible objects: <observations>[<similar_obs_idx>]
@@ -250,13 +254,13 @@ Now, answer the following questions:\n
     def get_prompt_examples(self, task, observation, k):
         # get the prompt examples given the current task and observation
         most_similar_task_idxs, most_similar_obs_idxs = self.find_similar_task_and_observation([task], observation, k)
-        prompt_examples = [self.get_prompt(most_similar_task_idx, most_similar_obs_idx) 
+        prompt_examples = [self.get_prompt(most_similar_task_idx, most_similar_obs_idx)
                            for most_similar_task_idx, most_similar_obs_idx in zip(most_similar_task_idxs, most_similar_obs_idxs)]
         prompt_examples = "\n\n".join(prompt_examples) + "\n\nNow, please finish the following task.\n\n"
-        
+
         return self.prompt_furniture_begin + prompt_examples
         # return self.prompt_begin + prompt_examples
-    
+
     def get_prompt(self, most_similar_task_idx, most_similar_obs_idx):
         task = self.task_lang_list[most_similar_task_idx]
         observation = self.obs_lang_list[most_similar_task_idx][most_similar_obs_idx]
@@ -264,7 +268,7 @@ Now, answer the following questions:\n
         # print(observation)
         prompt = self.construct_prompt(action, observation, task, most_similar_obs_idx)
         return prompt
-    
+
     def interpret_goal(self, goal_language, container_name2id):
         # interpret goal language into a list of actions
         # goal_language: string
@@ -285,40 +289,56 @@ Now, answer the following questions:\n
             elif relation == 'ON':
                 formal_goal[f'on_{target_object}_{container_name2id[container]}'] = [num, True, 2]
 
-        return formal_goal                      
+        return formal_goal
 
 
-        
+
     def query_llm_goal(self, ins):
         try_times = 0
-        while 1:
-            try: 
-                response = client.chat.completions.create(model=self.model,
-                # model = "gpt-4",
-                messages=[{
-                    "role": "system",
-                    # "content": self.prompt_furniture_begin,
-                    "content": self.lang_prompt,
-                },
-                {
-                    "role": "user",
-                    "content": f"Goal: {ins}.\nFormal goal: ",
-                }
-                ],
-                **self.get_goal_sample_params)
-                break
-            except:
-                try_times += 1
-                time.sleep(5)
-            if try_times >= 10:
-                return None
+        # while 1:
+        #     try:
+        #         # response = client.chat.completions.create(model=self.model,
+        #         # # model = "gpt-4",
+        #         # messages=[{
+        #         #     "role": "system",
+        #         #     # "content": self.prompt_furniture_begin,
+        #         #     "content": self.lang_prompt,
+        #         # },
+        #         # {
+        #         #     "role": "user",
+        #         #     "content": f"Goal: {ins}.\nFormal goal: ",
+        #         # }
+        #         # ],
+        #         # **self.get_goal_sample_params)
+        #         response = self.model.generate(messages=[{"role": "system",
+        #                                                   # "content": self.prompt_furniture_begin,
+        #                                                   "content": self.lang_prompt,},
+        #                                                   {"role": "user",
+        #                                                    "content": f"Goal: {ins}.\nFormal goal: ",
+        #                                                    }],
+        #                                                    **self.get_goal_sample_params)
+        #         break
+        #     except Exception as e:
+        #         try_times += 1
+        #         print(f"Failed to get response due to {e}, attempt #{try_times}")
+        #         time.sleep(5)
+        #     if try_times >= 10:
+        #         return None
         # print(task)
         # print(response['choices'][0]['message']['content'])
-        generated_samples = response.choices[0].message.content.split("-") 
+        # generated_samples = response.choices[0].message.content.split("-")
         # print(generated_samples)
+        response = self.model.generate(messages=[{"role": "system",
+                                                  # "content": self.prompt_furniture_begin,
+                                                  "content": self.lang_prompt, },
+                                                 {"role": "user",
+                                                  "content": f"Goal: {ins}.\nFormal goal: ",
+                                                  }],
+                                       **self.get_goal_sample_params)
+        generated_samples = response[0].split("-")
         # generated_samples = [response['choices'][i]['text'].split("\n")[0] for i in range(self.sampling_params['n'])]
             # calculate mean log prob across tokens
-        # mean_log_probs = [np.mean(response['choices'][i]['logprobs']['token_logprobs']) 
+        # mean_log_probs = [np.mean(response['choices'][i]['logprobs']['token_logprobs'])
                         #   for i in range(self.sampling_params['n'])]
         subgoals = []
         for subgoal in generated_samples:
@@ -331,7 +351,7 @@ Now, answer the following questions:\n
             subgoals.append([subgoal[0], subgoal[1], subgoal[2], subgoal[3]])
         return subgoals
 
-    
+
     def query_llm(self, task, ins, curr_obs, k=3):
         # response = openai.chatcompletion.create(
         #     model="gpt-3.5-turbo",
@@ -342,35 +362,43 @@ Now, answer the following questions:\n
         # print(prompt + task)
         print(task)
         try_times = 0
-        while 1:
-            try: 
-                response = client.chat.completions.create(model=self.model,
-                # model = "gpt-4",
-                messages=[{
-                    "role": "system",
-                    # "content": self.prompt_furniture_begin,
-                    "content": self.prompt_begin,
-                },
-                {
-                    "role": "user",
-                    "content": task,
-                }
-                ],
-                **self.sampling_params)
-                break
-            except:
-                try_times += 1
-                time.sleep(5)
-            if try_times >= 10:
-                return None
+        # while 1:
+        #     try:
+        #         response = client.chat.completions.create(model=self.model,
+        #         # model = "gpt-4",
+        #         messages=[{
+        #             "role": "system",
+        #             # "content": self.prompt_furniture_begin,
+        #             "content": self.prompt_begin,
+        #         },
+        #         {
+        #             "role": "user",
+        #             "content": task,
+        #         }
+        #         ],
+        #         **self.sampling_params)
+        #         break
+        #     except:
+        #         try_times += 1
+        #         time.sleep(5)
+        #     if try_times >= 10:
+        #         return None
         # print(task)
         # print(response['choices'][0]['message']['content'])
-        generated_samples = [response.choices[i].message.content.split(",") \
-            for i in range(self.sampling_params['n'])]
+        response = self.model.generate(messages=[{"role": "system",
+                                                  # "content": self.prompt_furniture_begin,
+                                                  "content": self.prompt_begin, },
+                                                 {"role": "user",
+                                                  "content": task,
+                                                  }],
+                                       **self.sampling_params)
+        generated_samples = [out.split(",") for out in response]
+        # generated_samples = [response.choices[i].message.content.split(",") \
+        #     for i in range(self.sampling_params['n'])]
         # print(generated_samples)
         # generated_samples = [response['choices'][i]['text'].split("\n")[0] for i in range(self.sampling_params['n'])]
             # calculate mean log prob across tokens
-        # mean_log_probs = [np.mean(response['choices'][i]['logprobs']['token_logprobs']) 
+        # mean_log_probs = [np.mean(response['choices'][i]['logprobs']['token_logprobs'])
                         #   for i in range(self.sampling_params['n'])]
         samples = []
         for generated_sample in generated_samples:
@@ -380,7 +408,7 @@ Now, answer the following questions:\n
                     sample_.remove('')
                 if len(sample_) != 2:
                     samples.append([sample_[0], sample_[1] + ' ' + sample_[2]])
-                samples.append(sample_) 
+                samples.append(sample_)
         return samples
 
     def construct_house_model(self):
@@ -393,7 +421,7 @@ Now, answer the following questions:\n
             samples = self.query_llm(f"Question: What is the most possible position of {object}?\nAnswer: ", "", "", 1)
             object_positions[object] = samples
             # print(object_positions[object])
-        # print(object_positions)   
+        # print(object_positions)
 
         # save samples
         json.dump(object_positions, open("./data/object_all_positions.json", "w"))
@@ -402,7 +430,7 @@ Now, answer the following questions:\n
             samples = self.query_llm(f"Question: What is the most possible position of {object}?\nAnswer: ", "", "", 1)
             object_positions[object] = samples
             # print(object_positions[object])
-        # print(object_positions)   
+        # print(object_positions)
         # save samples
         json.dump(object_positions, open("./data/furniture_all_positions.json", "w"))
 
@@ -410,14 +438,14 @@ Now, answer the following questions:\n
         history = '\n'
         step = 0
         for action in request.history:
-            
+
             if step >= len(request.observation_history):
                 break
             if step == 0:
                 step += 1
                 continue
             history += "You "
-            history += self.action_list[action] 
+            history += self.action_list[action]
             history += '.\n'
             history += f"You observe {self.trans_observation_to_string(request.observation_history[step])}\n"
             step += 1
@@ -431,7 +459,7 @@ Now, answer the following questions:\n
         # self.get_logger().info(
         #     f'Incoming request\nCompleted plan: {history}\nVisible object: {observation}')
 
-        action_next = self.plan(task) 
+        action_next = self.plan(task)
         if action_next is None:
             response.action = 7
             return response
@@ -449,7 +477,7 @@ Now, answer the following questions:\n
         if not isinstance(observation, str):
             observation = self.get_observation(observation)
         if len(history) >0:
-            hist_text = get_action_list_valid(history, len(history)) 
+            hist_text = get_action_list_valid(history, len(history))
         else:
             hist_text = ""
         valid_actions_lang = get_action_list_valid(valid_action_list, len(valid_action_list))
@@ -489,7 +517,7 @@ Now, answer the following questions:\n
         if not isinstance(observation, str):
             observation = self.get_observation(observation)
         if len(history) >0:
-            hist_text = get_action_list_valid(history, len(history)) 
+            hist_text = get_action_list_valid(history, len(history))
         else:
             hist_text = ""
         valid_actions_lang = get_action_list_valid(valid_action_list, len(valid_action_list))
@@ -516,7 +544,7 @@ Now, answer the following questions:\n
         ave_value = sum(pred_vale_functions)/len(pred_vale_functions)
         # print(f'Predicted value: {ave_value}')
         return ave_value
-    
+
     def rollout(self, history, observation, valid_actions, instruction, discount_factor):
         '''return number of remaining steps'''
         valid_action_list = list(valid_actions.keys())
@@ -524,7 +552,7 @@ Now, answer the following questions:\n
         task = f"Task description: {instruction}{history}You observe {observation}\nYou"
         samples = self.ground_actions(task, valid_action_embedding, valid_action_list)
         pass
-    
+
     def post_process(self, filepath, goal_path):
         # process the data after querying the llm
         data = json.load(open(filepath, 'r'))
@@ -539,14 +567,14 @@ Now, answer the following questions:\n
                 if rel not in ['INSIDE', 'ON']:
                     continue
                 else:
-                    similar_obj_idx = self.find_most_similar(obj, self.room_embedding) 
-                    # similar_obj_idx = self.find_most_similar(obj, self.position_list_embedding) 
+                    similar_obj_idx = self.find_most_similar(obj, self.room_embedding)
+                    # similar_obj_idx = self.find_most_similar(obj, self.position_list_embedding)
                     position_obj = self.room_list[similar_obj_idx]
                     if key not in data_new:
                         data_new[key] = {}
                     if (rel, position_obj) not in data_new[key]:
                         data_new[key][(rel, position_obj)] = 0
-     
+
                     data_new[key][(rel, position_obj)] += 1
         data_save = {}
         for key, value in data_new.items():

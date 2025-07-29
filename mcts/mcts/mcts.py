@@ -48,13 +48,13 @@ class MCTSAgent:
     def __init__(self, args, env, policy=None, name='MCTS', 
                 uct_type='PUCT', valid_action_dict=None, actions_info=None,
                   log_dir=None, visited_transitions=None, replay_file=None,
-                  use_llm=True):
+                  use_llm=True, model=None, model_params=None):
         self.env = env
         self.name = name
         # self.num_actions = env.action_num
         self.best_action_node = None
         self.uct_type = uct_type
-        self.seed = args.seed
+        # self.seed = args.seed
         self.round = args.round
         self.root = None
 
@@ -81,7 +81,7 @@ class MCTSAgent:
         self.simulation_num = args.simulation_num
         self.use_llm = use_llm
         if use_llm:
-            self.llm_policy = LLMPolicy(device="cuda:0", model=args.model) 
+            self.llm_policy = LLMPolicy('cuda:0', model, model_params)
         self.q_network = None
         # self.valid_action_dict = env.action_dict
         # self.valid_action_dict = {} if valid_action_dict is None else valid_action_dict
