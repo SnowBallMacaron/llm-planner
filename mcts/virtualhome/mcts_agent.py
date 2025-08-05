@@ -220,12 +220,14 @@ class mcts_vh_env:
         goal = self.task_goal[0]
         task_goal_languages = get_goal_language(goal, self.init_graph)
         task_goal = 'Goal: ' + ', '.join(task_goal_languages) + '.'
+        # task_goal = ', '.join(task_goal_languages)
         return task_goal
 
     @staticmethod
     def get_goal_(formal_goal, init_graph):
         task_goal_languages = get_goal_language(formal_goal, init_graph)
-        task_goal = 'Goal: ' + ', '.join(task_goal_languages) + '.'
+        # task_goal = 'Goal: ' + ', '.join(task_goal_languages) + '.'
+        task_goal = ', '.join(task_goal_languages)
         return task_goal
 
     def update(self, action, obs):
@@ -265,8 +267,8 @@ class mcts_vh_env:
         return text_obs, reward, done, self.history, valid_actions   
     
     def step(self, action):
-        obs = self.vh_pyenv._mask_state(self.cur_state_graph, 0)
-        valid_actions = self.get_valid_action([obs])
+        # obs = self.vh_pyenv._mask_state(self.cur_state_graph, 0)
+        # valid_actions = self.get_valid_action([obs])
         try:
             self.cur_state, succeed = self.vh_pyenv.transition(self.cur_state, {0: action}) 
         except:

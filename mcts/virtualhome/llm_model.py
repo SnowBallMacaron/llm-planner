@@ -13,6 +13,7 @@ import random
 import pickle
 from mcts.virtualhome.expert_data import get_action_list_valid
 import time
+import re
 
 MAX_STEPS = 20  # maximum number of steps to be generated
 CUTOFF_THRESHOLD = 0.8  # early stopping threshold based on matching score and likelihood score
@@ -342,8 +343,9 @@ Now, answer the following questions:\n
                         #   for i in range(self.sampling_params['n'])]
         subgoals = []
         for subgoal in generated_samples:
-            subgoal = subgoal.replace('(', '').replace(')', '')
-            subgoal = subgoal.split(',')
+            # subgoal = subgoal.replace('(', '').replace(')', '')
+            # subgoal = subgoal.split(',')
+            subgoal = [x.strip() for x in re.search(r"\((.*?)\)", subgoal).group(1).split(",")]
             subgoal[0] = subgoal[0].strip()
             subgoal[1] = subgoal[1].strip()
             subgoal[2] = subgoal[2].strip()

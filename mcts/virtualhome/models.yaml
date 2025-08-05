@@ -28,3 +28,152 @@ Qwen2.5-7B-Instruct:
 #    length_penalty: 1.0
     do_sample: true
     stop: ["\\n"]
+
+Qwen3-32B-CoT:
+  loading_params:
+    model_name: Qwen/Qwen3-32B         # HuggingFace repo ID
+    torch_dtype: auto                  # use checkpoint’s native precision
+    device_map: {"": 0}                   # auto‐shard across GPUs/CPU
+    trust_remote_code: true            # required for Qwen3’s custom code
+    load_in_4bit: true                 # enable 4-bit NF4 quantization
+    bnb_4bit_quant_type: nf4           # “Normalized Float 4” scheme :contentReference[oaicite:0]{index=0}
+    bnb_4bit_compute_dtype: auto       # compute in float16/bfloat16 as appropriate
+    offload_folder: null               # (optional CPU offload folder)
+    enable_thinking: true              # turn on Qwen3’s chain‐of‐thought “<think>” blocks
+#    thinking_token: "<think>"
+
+  goal_sample_params:
+    # “Formal goal” parsing: authors recommend same as thinking‐mode defaults
+    max_new_tokens:       128          # (was max_tokens)
+    temperature:           0.6         # author‐recommended :contentReference[oaicite:1]{index=1}
+    top_p:                 0.95        # author‐recommended :contentReference[oaicite:2]{index=2}
+    top_k:                20           # author‐recommended :contentReference[oaicite:3]{index=3}
+    repetition_penalty:    1.0         # soft repeat avoidance
+    num_return_sequences:  1           # only need one formal‐goal parse
+    no_repeat_ngram_size:  0
+#    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+  sampling_params:
+    # “Planning” sampling: also follow thinking‐mode defaults for best coherence
+    max_new_tokens:       32
+    temperature:           0.6
+    top_p:                 0.95
+    top_k:                20
+    repetition_penalty:    1.0
+    num_return_sequences: 50          # generate multiple candidate plans
+    no_repeat_ngram_size:  0
+    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+Qwen3-32B-no-CoT:
+  loading_params:
+    model_name: Qwen/Qwen3-32B         # HuggingFace repo ID
+    torch_dtype: auto                  # use checkpoint’s native precision
+    device_map: auto                   # auto-shard across GPUs/CPU
+    trust_remote_code: true            # required for Qwen3’s custom code
+    load_in_4bit: true                 # enable 4-bit NF4 quantization
+    bnb_4bit_quant_type: nf4           # “Normalized Float 4” scheme
+    bnb_4bit_compute_dtype: auto       # compute in float16/bfloat16 as appropriate
+    enable_thinking: false             # disable thinking-mode markers
+
+  goal_sample_params:
+    max_new_tokens:       32
+    temperature:           0.7
+    top_p:                 0.8
+    top_k:                20
+    repetition_penalty:    1.0
+    num_return_sequences:  1
+    no_repeat_ngram_size:  0
+    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+  sampling_params:
+    max_new_tokens:       32
+    temperature:           0.7
+    top_p:                 0.8
+    top_k:                20
+    repetition_penalty:    1.0
+    num_return_sequences: 50
+    no_repeat_ngram_size:  0
+    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+Qwen3-14B-CoT:
+  loading_params:
+    model_name: Qwen/Qwen3-14B         # HuggingFace repo ID
+    torch_dtype: auto                  # use checkpoint’s native precision
+    device_map: {"": 0}                   # auto‐shard across GPUs/CPU
+    trust_remote_code: true            # required for Qwen3’s custom code
+#    load_in_8bit: true
+    load_in_4bit: true                 # enable 4-bit NF4 quantization
+    bnb_4bit_quant_type: nf4           # “Normalized Float 4” scheme :contentReference[oaicite:0]{index=0}
+    bnb_4bit_compute_dtype: auto       # compute in float16/bfloat16 as appropriate
+    offload_folder: null               # (optional CPU offload folder)
+    enable_thinking: true              # turn on Qwen3’s chain‐of‐thought “<think>” blocks
+#    thinking_token: "<think>"
+
+  goal_sample_params:
+    # “Formal goal” parsing: authors recommend same as thinking‐mode defaults
+    max_new_tokens:       4096          # (was max_tokens)
+    temperature:           0.6         # author‐recommended :contentReference[oaicite:1]{index=1}
+    top_p:                 0.95        # author‐recommended :contentReference[oaicite:2]{index=2}
+    top_k:                20           # author‐recommended :contentReference[oaicite:3]{index=3}
+    repetition_penalty:    1.0         # soft repeat avoidance
+    num_return_sequences:  1           # only need one formal‐goal parse
+    no_repeat_ngram_size:  0
+#    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+  sampling_params:
+    # “Planning” sampling: also follow thinking‐mode defaults for best coherence
+    max_new_tokens:       32
+    temperature:           0.6
+    top_p:                 0.95
+    top_k:                20
+    repetition_penalty:    1.0
+    num_return_sequences: 50          # generate multiple candidate plans
+    no_repeat_ngram_size:  0
+    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+Qwen3-14B-no-CoT:
+  loading_params:
+    model_name: Qwen/Qwen3-14B         # HuggingFace repo ID
+    torch_dtype: auto                  # use checkpoint’s native precision
+    device_map: auto                   # auto-shard across GPUs/CPU
+    trust_remote_code: true            # required for Qwen3’s custom code
+    load_in_4bit: true                 # enable 4-bit NF4 quantization
+    bnb_4bit_quant_type: nf4           # “Normalized Float 4” scheme
+    bnb_4bit_compute_dtype: auto       # compute in float16/bfloat16 as appropriate
+    enable_thinking: false             # disable thinking-mode markers
+
+  goal_sample_params:
+    max_new_tokens:       128
+    temperature:           0.7
+    top_p:                 0.8
+    top_k:                20
+    repetition_penalty:    1.0
+    num_return_sequences:  1
+    no_repeat_ngram_size:  0
+    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]
+
+  sampling_params:
+    max_new_tokens:       32
+    temperature:           0.7
+    top_p:                 0.8
+    top_k:                20
+    repetition_penalty:    1.0
+    num_return_sequences: 50
+    no_repeat_ngram_size:  0
+    length_penalty:        1.0
+    do_sample:            true
+    stop: ["\n"]

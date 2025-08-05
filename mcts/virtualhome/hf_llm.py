@@ -12,7 +12,6 @@ class StopOnSequence(StoppingCriteria):
     Stop generation once any of the specified token sequences is produced.
     """
     def __init__(self, stop_sequences, tokenizer):
-        # Convert each stop string into its token-ID sequence
         self.stop_token_ids = [
             tokenizer(seq, add_special_tokens=False)["input_ids"]
             for seq in stop_sequences
@@ -31,7 +30,7 @@ class StopOnSequence(StoppingCriteria):
 class LocalLLM:
     """
     A local Hugging Face LLM wrapper supporting full sampling hyperparameters,
-    custom stop-sequences, and optional quantization via BitsAndBytes.
+    custom stop-sequences, quantization, and Qwen3 thinking mode with token-level filtering.
     """
     def __init__(
         self,
@@ -46,8 +45,15 @@ class LocalLLM:
         bnb_4bit_compute_dtype: str = "auto",
         # Offloading
         offload_folder: str = None,
+        # Qwen3 thinking
+        enable_thinking: bool = False,
+        thinking_open: str = "<think>",
+        thinking_close: str = "</think>",
         **kwargs
     ):
+        self.enable_thinking = enable_thinking
+        self.thinking_open = thinking_open
+        self.thinking_close = thinking_close
         # Prepare BitsAndBytes config if 4-bit quantization is requested
         quant_config = None
         if load_in_4bit:
@@ -73,7 +79,6 @@ class LocalLLM:
             load_in_8bit=load_in_8bit,
             quantization_config=quant_config,
             offload_folder=offload_folder,
-            attn_implementation="flash_attention_2",
             **kwargs
         )
 
@@ -93,48 +98,64 @@ class LocalLLM:
         do_sample: bool = True,
         stop: list[str] = None,
     ) -> list[str]:
-        # Build text input
+        # Build input text
         if messages is not None:
-            # For chat-capable models, apply HF chat template
             text = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=True,
+                enable_thinking=self.enable_thinking,
             )
         elif prompt is not None:
             text = prompt
         else:
             raise ValueError("Either prompt or messages must be provided.")
 
-        # Tokenize
+        # Tokenize prompt
         inputs = self.tokenizer([text], return_tensors="pt", padding=True).to(self.model.device)
+        input_ids = inputs["input_ids"][0]
 
         # Prepare stopping criteria
         stopping_criteria = None
         if stop:
             stopping_criteria = StoppingCriteriaList([StopOnSequence(stop, self.tokenizer)])
 
-        # Generate
+        # Generate tokens
         outputs = self.model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
-            repetition_penalty=repetition_penalty,
+            # repetition_penalty=repetition_penalty,
             num_return_sequences=num_return_sequences,
             no_repeat_ngram_size=no_repeat_ngram_size,
             length_penalty=length_penalty,
             do_sample=do_sample,
-            stopping_criteria=stopping_criteria,
+            # stopping_criteria=stopping_criteria,
+            use_cache=True,
         )
 
-        # Decode, stripping the prompt tokens
         results = []
-        prompt_len = inputs["input_ids"].shape[1]
+        idx = 0
+        # Process each generated sequence
         for seq in outputs:
-            gen_tokens = seq[prompt_len:]
-            text_out = self.tokenizer.decode(gen_tokens, skip_special_tokens=True)
-            results.append(text_out)
-
+            # Remove prompt tokens
+            gen_ids = seq[len(input_ids):].tolist()
+            if self.enable_thinking:
+                # Identify token IDs for thinking markers
+                open_id = self.tokenizer(self.thinking_open, add_special_tokens=False)["input_ids"][0]
+                close_id = self.tokenizer(self.thinking_close, add_special_tokens=False)["input_ids"][0]
+                # Find last occurrence of close marker
+                idx = len(gen_ids) - gen_ids[::-1].index(close_id)
+                # Slice to get only answer tokens
+                answer_ids = gen_ids[idx:]
+            else:
+                answer_ids = gen_ids
+            # Decode and append
+            think_text = self.tokenizer.decode(gen_ids[:idx], skip_special_tokens=True).strip()
+            answer_text = self.tokenizer.decode(answer_ids, skip_special_tokens=True).strip().split(":")[-1]
+            results.append(answer_text)
+            # print(f"Input: {text}")
+            # print(f"Answer (think): {think_text} \n Answer (out): {answer_text}")
         return results
